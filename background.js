@@ -18,9 +18,8 @@ async function syncToGitHub(data) {
     let path = '';
     
     if (data.platform === 'leetcode') {
-        const formattedId = data.questionId.toString().padStart(4, '0');
         const formattedName = data.questionName.replace(/\s+/g, '_');
-        path = `leetcode/${formattedId}_${formattedName}/solution${data.ext}`;
+        path = `leetcode/${formattedName}/solution${data.ext}`;
     } else if (data.platform === 'codeforces') {
         const formattedName = data.questionName.replace(/\s+/g, '_');
         path = `codeforces/${formattedName}/solution${data.ext}`;
