@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "DSA Sync to GitHub",
+  "version": "1.0",
+  "description": "Automatically syncs your accepted LeetCode and Codeforces solutions to your GitHub repository.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://leetcode.com/*",
+    "https://codeforces.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://leetcode.com/problems/*"],
+      "js": ["content_leetcode.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://codeforces.com/*"],
+      "js": ["content_codeforces.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
