@@ -88,6 +88,33 @@ const extractLeetcodeCode = () => {
     return stripLineNumbers(extractedCode);
 };
 
+const showToast = (message, isError = false) => {
+    const toast = document.createElement('div');
+    Object.assign(toast.style, {
+        position: 'fixed', bottom: '24px', right: '24px', zIndex: '9999999',
+        backgroundColor: isError ? '#ef4444' : '#22c55e', color: '#fff',
+        padding: '12px 24px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '14px', fontWeight: '500',
+        transition: 'opacity 0.3s ease, transform 0.3s ease',
+        transform: 'translateY(20px)', opacity: '0'
+    });
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    requestAnimationFrame(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            if (document.body.contains(toast)) document.body.removeChild(toast);
+        }, 300);
+    }, 4000);
+};
+
 const showCustomPrompt = (defaultName, codeSnippet, language) => {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
@@ -287,9 +314,11 @@ setInterval(async () => {
 
         chrome.runtime.sendMessage({ type: 'SYNC_SUBMISSION', payload: payload }, (response) => {
             if (chrome.runtime.lastError) {
-                console.error("DSA Sync Error:", chrome.runtime.lastError);
+                showToast("Extension Error: " + chrome.runtime.lastError.message, true);
+            } else if (response && response.success) {
+                showToast(response.message || "Successfully pushed to GitHub!");
             } else {
-                console.log("DSA Sync Response:", response);
+                showToast(response ? response.message : "Unknown error occurred", true);
             }
         });
     }

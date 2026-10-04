@@ -14,6 +14,33 @@ const getExtension = (lang) => {
     return '.txt';
 };
 
+const showToast = (message, isError = false) => {
+    const toast = document.createElement('div');
+    Object.assign(toast.style, {
+        position: 'fixed', bottom: '24px', right: '24px', zIndex: '9999999',
+        backgroundColor: isError ? '#ef4444' : '#22c55e', color: '#fff',
+        padding: '12px 24px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '14px', fontWeight: '500',
+        transition: 'opacity 0.3s ease, transform 0.3s ease',
+        transform: 'translateY(20px)', opacity: '0'
+    });
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    requestAnimationFrame(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            if (document.body.contains(toast)) document.body.removeChild(toast);
+        }, 300);
+    }, 4000);
+};
+
 const showCustomPrompt = (defaultName, codeSnippet, language) => {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
@@ -126,25 +153,66 @@ const attemptCodeforcesSync = async () => {
     let questionId = '0000';
     let lang = 'cpp';
 
-    const problemLink = document.querySelector('a[href*="/problem/"]');
+    let problemLink = null;
+    const allLinks = document.querySelectorAll('a[href*="/problem/"]');
+    for (let link of allLinks) {
+        if (link.closest('td')) {
+            problemLink = link;
+            if (link.textContent.includes(' - ')) {
+                break;
+            }
+        }
+    }
     
     if (problemLink) {
         const fullText = problemLink.textContent.trim();
-        const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/);
+        // Match "208A - Dubstep" or similar
+        const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/i);
         if (match) {
-            questionId = match[1];
+            questionId = match[1].toUpperCase();
             questionName = match[2].trim();
         } else {
-            questionName = fullText;
+            // Match just the ID if it's rendered alone, e.g. "208A"
+            const idMatch = fullText.match(/^([0-9]+[A-Z][0-9]*)$/i);
+            if (idMatch) {
+                questionId = idMatch[1].toUpperCase();
+                questionName = ''; // Flag to fetch it
+            } else {
+                questionName = fullText;
+            }
         }
 
         const problemCell = problemLink.closest('td');
         if (problemCell && problemCell.nextElementSibling) {
             lang = problemCell.nextElementSibling.textContent.trim();
         }
+        
+        // If we couldn't find the name on the page, fetch the problem page to get it!
+        if (questionName === '') {
+            try {
+                const response = await fetch(problemLink.href);
+                const html = await response.text();
+                // Codeforces problem titles are in <div class="title">X. Name</div>
+                const titleMatch = html.match(/<div class="title">(?:[^.]*\.\s*)?(.*?)<\/div>/);
+                if (titleMatch) {
+                    questionName = titleMatch[1].trim();
+                } else {
+                    questionName = 'unknown'; // Give up gracefully
+                }
+            } catch (e) {
+                console.error("DSA Sync: Failed to fetch problem name", e);
+                questionName = 'unknown';
+            }
+        }
     }
 
-    const userProvidedName = await showCustomPrompt(`${questionId}_${questionName}`, code, lang);
+    // Format the default name gracefully
+    let defaultName = questionId;
+    if (questionName && questionName !== 'unknown') {
+        defaultName = `${questionId}_${questionName}`;
+    }
+
+    const userProvidedName = await showCustomPrompt(defaultName, code, lang);
     
     if (userProvidedName === null) {
         console.log("DSA Sync: Sync cancelled by user.");
@@ -163,9 +231,11 @@ const attemptCodeforcesSync = async () => {
 
     chrome.runtime.sendMessage({ type: 'SYNC_SUBMISSION', payload: payload }, (response) => {
         if (chrome.runtime.lastError) {
-            console.error("DSA Sync Error:", chrome.runtime.lastError);
+            showToast("Extension Error: " + chrome.runtime.lastError.message, true);
+        } else if (response && response.success) {
+            showToast(response.message || "Successfully pushed to GitHub!");
         } else {
-            console.log("DSA Sync Response:", response);
+            showToast(response ? response.message : "Unknown error occurred", true);
         }
     });
 
@@ -202,23 +272,53 @@ setInterval(async () => {
                 const probLink = row.querySelector('a[href*="/problem/"]');
                 if (probLink) {
                     const fullText = probLink.textContent.trim();
-                    const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/);
+                    // Match "208A - Dubstep" or similar
+                    const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/i);
                     if (match) {
-                        questionId = match[1];
+                        questionId = match[1].toUpperCase();
                         questionName = match[2].trim();
                     } else {
-                        questionName = fullText;
+                        const idMatch = fullText.match(/^([0-9]+[A-Z][0-9]*)$/i);
+                        if (idMatch) {
+                            questionId = idMatch[1].toUpperCase();
+                            questionName = ''; // Flag to fetch it
+                        } else {
+                            questionName = fullText;
+                        }
                     }
                     
                     const problemCell = probLink.closest('td');
                     if (problemCell && problemCell.nextElementSibling) {
                         lang = problemCell.nextElementSibling.textContent.trim();
                     }
+                    
+                    // If we couldn't find the name on the page, fetch the problem page to get it!
+                    if (questionName === '') {
+                        try {
+                            const response = await fetch(probLink.href);
+                            const html = await response.text();
+                            const titleMatch = html.match(/<div class="title">(?:[^.]*\.\s*)?(.*?)<\/div>/);
+                            if (titleMatch) {
+                                questionName = titleMatch[1].trim();
+                            } else {
+                                questionName = 'unknown'; // Give up gracefully
+                            }
+                        } catch (e) {
+                            console.error("DSA Sync: Failed to fetch problem name", e);
+                            questionName = 'unknown';
+                        }
+                    }
                 }
             }
         }
 
-        const userProvidedName = await showCustomPrompt(`${questionId}_${questionName}`, code, lang);
+        // Format the default name gracefully
+        let defaultName = questionId;
+        if (questionName && questionName !== 'unknown') {
+            defaultName = `${questionId}_${questionName}`;
+        }
+
+        const userProvidedName = await showCustomPrompt(defaultName, code, lang);
         
         if (userProvidedName === null) {
             console.log("DSA Sync: Sync cancelled by user.");
@@ -236,8 +336,12 @@ setInterval(async () => {
         };
 
         chrome.runtime.sendMessage({ type: 'SYNC_SUBMISSION', payload: payload }, (response) => {
-            if (!chrome.runtime.lastError) {
-                console.log("DSA Sync Response:", response);
+            if (chrome.runtime.lastError) {
+                showToast("Extension Error: " + chrome.runtime.lastError.message, true);
+            } else if (response && response.success) {
+                showToast(response.message || "Successfully pushed to GitHub!");
+            } else {
+                showToast(response ? response.message : "Unknown error occurred", true);
             }
         });
     }
