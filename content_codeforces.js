@@ -251,13 +251,13 @@ const attemptCodeforcesSync = async () => {
         // Match "208A - Dubstep" or similar
         const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/i);
         if (match) {
-            questionId = match[1].toUpperCase();
+            questionId = match[1].toUpperCase().padStart(4, '0');
             questionName = match[2].trim();
         } else {
             // Match just the ID if it's rendered alone, e.g. "208A"
             const idMatch = fullText.match(/^([0-9]+[A-Z][0-9]*)$/i);
             if (idMatch) {
-                questionId = idMatch[1].toUpperCase();
+                questionId = idMatch[1].toUpperCase().padStart(4, '0');
                 questionName = ''; // Flag to fetch it
             } else {
                 questionName = fullText;
@@ -349,12 +349,12 @@ setInterval(async () => {
                     // Match "208A - Dubstep" or similar
                     const match = fullText.match(/^([A-Z0-9]+)\s*-\s*(.*)/i);
                     if (match) {
-                        questionId = match[1].toUpperCase();
+                        questionId = match[1].toUpperCase().padStart(4, '0');
                         questionName = match[2].trim();
                     } else {
                         const idMatch = fullText.match(/^([0-9]+[A-Z][0-9]*)$/i);
                         if (idMatch) {
-                            questionId = idMatch[1].toUpperCase();
+                            questionId = idMatch[1].toUpperCase().padStart(4, '0');
                             questionName = ''; // Flag to fetch it
                         } else {
                             questionName = fullText;
