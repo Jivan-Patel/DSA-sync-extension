@@ -3,9 +3,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         syncToGitHub(request.payload).then(res => {
             sendResponse({success: res.success, message: res.message});
         });
-        return true; // Keep message channel open for async response
+        return true; 
+    }
+    if (request.type === 'CHECK_EXISTS') {
+        checkExists(request.payload).then(res => sendResponse(res));
+        return true;
     }
 });
+
+async function checkExists(data) {
+    const res = await chrome.storage.local.get(['ghToken', 'repoName']);
+    if (!res.ghToken || !res.repoName) return { exists: false };
+    
+    let path = '';
+    if (data.platform === 'leetcode') {
+        path = `leetcode/${data.questionName.replace(/\s+/g, '_')}/solution${data.ext}`;
+    } else if (data.platform === 'codeforces') {
+        path = `codeforces/${data.questionName.replace(/\s+/g, '_')}/solution${data.ext}`;
+    }
+
+    const apiUrl = `https://api.github.com/repos/${res.repoName}/contents/${path}`;
+    try {
+        const getRes = await fetch(apiUrl, {
+            headers: { 'Authorization': `token ${res.ghToken}`, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        return { exists: getRes.status === 200 };
+    } catch (e) {
+        return { exists: false };
+    }
+}
 
 async function syncToGitHub(data) {
     // data contains: { platform, questionId, questionName, code, ext }

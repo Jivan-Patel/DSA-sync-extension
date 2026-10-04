@@ -115,6 +115,88 @@ const showToast = (message, isError = false) => {
     }, 4000);
 };
 
+const showConfirmPrompt = (message) => {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)', zIndex: '9999999', 
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            backdropFilter: 'blur(4px)', fontFamily: 'system-ui, -apple-system, sans-serif'
+        });
+
+        const modal = document.createElement('div');
+        Object.assign(modal.style, {
+            backgroundColor: '#1e1e1e', color: '#fff', padding: '24px',
+            borderRadius: '12px', width: '400px', border: '1px solid #ef4444',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '16px'
+        });
+
+        const title = document.createElement('h2');
+        title.textContent = '⚠️ Overwrite Warning';
+        Object.assign(title.style, { margin: '0', fontSize: '18px', fontWeight: '600', color: '#ef4444' });
+
+        const desc = document.createElement('p');
+        desc.textContent = message;
+        Object.assign(desc.style, { margin: '0', fontSize: '14px', color: '#d1d5db', lineHeight: '1.5', whiteSpace: 'pre-wrap' });
+
+        const btnContainer = document.createElement('div');
+        Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' });
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        Object.assign(cancelBtn.style, {
+            padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#333',
+            color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: '500'
+        });
+
+        const overwriteBtn = document.createElement('button');
+        overwriteBtn.textContent = 'Overwrite';
+        Object.assign(overwriteBtn.style, {
+            padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#ef4444',
+            color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: '600'
+        });
+
+        btnContainer.appendChild(cancelBtn);
+        btnContainer.appendChild(overwriteBtn);
+        modal.appendChild(title);
+        modal.appendChild(desc);
+        modal.appendChild(btnContainer);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const close = (result) => {
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            resolve(result);
+        };
+
+        cancelBtn.onclick = () => close(false);
+        overwriteBtn.onclick = () => close(true);
+    });
+};
+
+const syncWithConfirm = (payload) => {
+    chrome.runtime.sendMessage({ type: 'CHECK_EXISTS', payload: payload }, async (response) => {
+        if (response && response.exists) {
+            const confirm = await showConfirmPrompt(`A solution for "${payload.questionName}" already exists on your GitHub.\n\nDo you want to overwrite it?`);
+            if (!confirm) {
+                showToast("Sync cancelled.", false);
+                return;
+            }
+        }
+        
+        chrome.runtime.sendMessage({ type: 'SYNC_SUBMISSION', payload: payload }, (syncResp) => {
+            if (chrome.runtime.lastError) {
+                showToast("Extension Error: " + chrome.runtime.lastError.message, true);
+            } else if (syncResp && syncResp.success) {
+                showToast(syncResp.message || "Successfully pushed to GitHub!");
+            } else {
+                showToast(syncResp ? syncResp.message : "Unknown error occurred", true);
+            }
+        });
+    });
+};
+
 const showCustomPrompt = (defaultName, codeSnippet, language) => {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
@@ -312,15 +394,7 @@ setInterval(async () => {
             ext: getExtension(lang)
         };
 
-        chrome.runtime.sendMessage({ type: 'SYNC_SUBMISSION', payload: payload }, (response) => {
-            if (chrome.runtime.lastError) {
-                showToast("Extension Error: " + chrome.runtime.lastError.message, true);
-            } else if (response && response.success) {
-                showToast(response.message || "Successfully pushed to GitHub!");
-            } else {
-                showToast(response ? response.message : "Unknown error occurred", true);
-            }
-        });
+        syncWithConfirm(payload);
     }
 }, 2000);
 
